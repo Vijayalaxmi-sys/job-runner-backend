@@ -291,35 +291,43 @@ Database access management
 Shared database connectivity
 
 # 4. Database Design
-jobs Table
 
-The jobs table stores complete job lifecycle information.
+## jobs Table
 
-Column	Purpose
-id	Unique job identifier
-tenant_id	Tenant ownership
-idempotency_key	Duplicate request prevention
-type	Job category
-payload	Job input data
-estimated_cost	Determines approval requirement
-status	Current lifecycle state
-attempts	Retry tracking
-max_attempts	Maximum allowed retries
-leased_by	Worker ownership
-lease_until	Worker lease expiration
-side_effects Table
+The `jobs` table stores complete job lifecycle information, including job ownership, execution state, retry tracking, and worker coordination details.
 
-The provided side_effects table stores the results of external executions.
+| Column | Purpose |
+|---|---|
+| `id` | Unique job identifier |
+| `tenant_id` | Identifies the tenant that owns the job |
+| `idempotency_key` | Prevents duplicate job creation requests |
+| `type` | Defines the job category/type |
+| `payload` | Stores the job input data |
+| `estimated_cost` | Determines whether approval is required |
+| `status` | Tracks the current job lifecycle state |
+| `attempts` | Tracks the number of execution attempts |
+| `max_attempts` | Defines the maximum retry limit |
+| `leased_by` | Identifies the worker currently processing the job |
+| `lease_until` | Defines the worker lease expiration time |
 
-Additional protection:
 
+## side_effects Table
+
+The provided `side_effects` table stores the results of external job executions.
+
+Additional protection was implemented using:
+
+```sql
 UNIQUE(job_id)
+```
 
-Purpose:
+### Purpose
 
-Prevent duplicate side effects
-Support recovery after worker failures
-Guarantee exactly-once execution behavior
+The `side_effects` table provides:
+
+- Protection against duplicate external side effects
+- Recovery support after worker failures
+- Exactly-once execution guarantees
 
 # 5. Job Lifecycle
 
@@ -419,19 +427,50 @@ test_worker_recovery.py
 
 # 7. Testing Evidence
 
-Run Tests
-docker compose exec api pytest -q
-Result
-6 passed
-Test Coverage
-Test	Purpose	Result
-test_idempotency.py	Duplicate protection	PASS
-test_idempotency_race.py	Concurrent requests	PASS
-test_side_effect.py	Exactly once effect	PASS
-test_approval.py	Approval race handling	PASS
-test_worker_concurrency.py	Worker locking	PASS
-test_worker_recovery.py	Crash recovery	PASS
+The project includes automated tests to validate all major reliability requirements, including idempotency, concurrency handling, exactly-once execution, approval workflows, and worker recovery.
 
+## Run Tests
+
+Execute the complete test suite using:
+
+```bash
+docker compose exec api pytest -q
+```
+
+## Test Result
+
+The complete test suite passed successfully:
+
+```text
+6 passed
+```
+
+## Test Coverage
+
+| Test | Purpose | Result |
+|---|---|---|
+| `test_idempotency.py` | Validates duplicate job request protection using idempotency keys | PASS |
+| `test_idempotency_race.py` | Validates concurrent duplicate requests create only one job | PASS |
+| `test_side_effect.py` | Validates exactly-once side effect execution | PASS |
+| `test_approval.py` | Validates approval/rejection race condition handling | PASS |
+| `test_worker_concurrency.py` | Validates multiple workers cannot claim the same job | PASS |
+| `test_worker_recovery.py` | Validates recovery of jobs after worker lease expiration | PASS |
+
+## Reliability Validation Summary
+
+The test suite confirms that the system successfully handles:
+
+- Duplicate client requests
+- Concurrent worker execution
+- Duplicate side effect prevention
+- Approval race conditions
+- Worker failure recovery
+
+Final validation:
+
+```text
+6/6 tests passed
+```
 # 8. Running the System
 
 Start application:
