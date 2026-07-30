@@ -1,6 +1,5 @@
 **1. Project Overview**
 
-Objective
 The objective of this project is to design and implement a reliable asynchronous job processing backend capable of handling real-world distributed system challenges, including:
 Duplicate client requests
 Concurrent worker execution
