@@ -317,9 +317,13 @@ Prevent duplicate side effects
 Support recovery after worker failures
 Guarantee exactly-once execution behavior
 
-**5. Job Lifecycle**
+# 5. Job Lifecycle
 
-Normal Execution
+The system manages jobs through clearly defined states.
+
+## Normal Execution Flow
+
+```text
 queued
    |
    v
@@ -327,21 +331,34 @@ running
    |
    v
 succeeded
-Failure Flow
+```
+
+## Failure Flow
+
+```text
 running
    |
    v
 failed
-Approval Flow
+```
+
+## Approval Workflow
+
+Jobs exceeding the configured approval threshold require approval.
+
+```text
 queued
    |
    v
 awaiting_approval
         |
-        +------------+
-        |            |
-        v            v
-   approved      rejected
+        +----------------+
+        |                |
+        v                v
+   approved          rejected
+```
+
+Approval transitions are controlled using atomic database updates to prevent race conditions.
    
 **6. Reliability Guarantees**
 
