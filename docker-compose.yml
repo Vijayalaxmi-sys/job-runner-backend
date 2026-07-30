@@ -1,0 +1,62 @@
+name: job-runner
+
+# Service names (db, api, worker) and host ports (5432, 8000) are fixed —
+# our grading harness connects to them. Everything else is yours to change.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    build: .
+    command: ["python", "scripts/migrate.py"]
+    environment:
+      DATABASE_URL: postgresql://app:app@db:5432/app
+    volumes:
+      - .:/srv
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build: .
+    command:
+      ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    environment:
+      DATABASE_URL: postgresql://app:app@db:5432/app
+      APPROVAL_COST_THRESHOLD: ${APPROVAL_COST_THRESHOLD:-100}
+      JOB_LEASE_SECONDS: ${JOB_LEASE_SECONDS:-30}
+      EXECUTOR_FAILURE_RATE: ${EXECUTOR_FAILURE_RATE:-0.2}
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/srv
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    build: .
+    command: ["python", "-m", "app.worker"]
+    environment:
+      DATABASE_URL: postgresql://app:app@db:5432/app
+      APPROVAL_COST_THRESHOLD: ${APPROVAL_COST_THRESHOLD:-100}
+      JOB_LEASE_SECONDS: ${JOB_LEASE_SECONDS:-30}
+      EXECUTOR_FAILURE_RATE: ${EXECUTOR_FAILURE_RATE:-0.2}
+    volumes:
+      - .:/srv
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
