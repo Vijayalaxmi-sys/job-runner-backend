@@ -1,4 +1,4 @@
-**1. Project Overview**
+# 1. Project Overview
 
 The objective of this project is to design and implement a reliable asynchronous job processing backend capable of handling real-world distributed system challenges, including:
 Duplicate client requests
@@ -184,6 +184,7 @@ The system ensures a job is not processed multiple times even when:
 Multiple workers are active
 Requests are duplicated
 Failures occur during execution
+
 **2. Data Consistency**
 PostgreSQL acts as the single source of truth.
 Database transactions control:
@@ -191,7 +192,8 @@ Job states
 Worker ownership
 Approval transitions
 Side-effect records
-3. Fault Tolerance
+
+**3. Fault Tolerance**
 
 The system continues operating when:
 Workers fail
@@ -205,6 +207,7 @@ Multiple workers can execute simultaneously while preventing:
 Duplicate job ownership
 Race conditions
 Invalid state transitions
+
 **5. Verifiable Correctness**
 Automated tests validate all reliability guarantees.
 Final validation:
@@ -244,7 +247,8 @@ side_effects Table
 | Worker Processes | Background job execution, job claiming, retry handling, and recovery |
 | Executor | Performs the actual job execution |
 | side_effects Table | Prevents duplicate external effects |
-**3. Application Components**
+
+# 3. Application Components
 app/main.py
 
 Responsible for API functionality.
@@ -286,7 +290,7 @@ PostgreSQL asynchronous connection pool
 Database access management
 Shared database connectivity
 
-**4. Database Design**
+# 4. Database Design
 jobs Table
 
 The jobs table stores complete job lifecycle information.
@@ -360,7 +364,7 @@ awaiting_approval
 
 Approval transitions are controlled using atomic database updates to prevent race conditions.
    
-**6. Reliability Guarantees**
+# 6. Reliability Guarantees
 
 **I1 - Idempotency**
 
@@ -413,7 +417,7 @@ Expired jobs can be reclaimed by another worker.
 Test
 test_worker_recovery.py
 
-**7. Testing Evidence**
+# 7. Testing Evidence
 
 Run Tests
 docker compose exec api pytest -q
@@ -428,14 +432,14 @@ test_approval.py	Approval race handling	PASS
 test_worker_concurrency.py	Worker locking	PASS
 test_worker_recovery.py	Crash recovery	PASS
 
-**8. Running the System**
+# 8. Running the System
 
 Start application:
 docker compose up --build -d --scale worker=3
 Run tests:
 docker compose exec api pytest -q
 
-**9. Design Decisions and Trade-offs**
+# 9. Design Decisions and Trade-offs
 
 **Why PostgreSQL?**
 PostgreSQL provides:
