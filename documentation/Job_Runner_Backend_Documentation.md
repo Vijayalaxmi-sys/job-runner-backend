@@ -1,324 +1,467 @@
-**1. Project Overview**
+1. Project Overview
 Objective
 
-The objective of this project is to design and implement a reliable asynchronous job processing backend capable of handling real-world distributed system challenges such as duplicate requests, concurrent worker execution, execution failures, approval workflows, and worker interruptions.
+The objective of this project is to design and implement a reliable asynchronous job processing backend capable of handling real-world distributed system challenges, including:
 
-The system was built using FastAPI, PostgreSQL, Docker Compose, and asynchronous Python workers to provide a durable and fault-tolerant job execution platform.
+Duplicate client requests
+Concurrent worker execution
+Execution failures
+Approval workflows
+Worker interruptions and recovery scenarios
 
-The primary goal was to ensure that jobs are:
+The system was implemented using:
 
-Created reliably through an API interface
+FastAPI for API services
+PostgreSQL for durable state management
+Docker Compose for multi-service deployment
+Asynchronous Python workers for background processing
+
+The goal was to build a fault-tolerant job execution platform where jobs are created, processed, and completed safely under distributed system conditions.
+
+Primary Objectives
+
+The system ensures that jobs are:
+
+Created reliably through API endpoints
 Processed asynchronously by background workers
-Executed safely without duplicate processing
+Executed without duplicate processing
 Protected against duplicate external side effects
 Recoverable after worker failures
 Controlled through approval workflows when required
 Problem Being Solved
 
-In a production job processing system, simply creating a queue and running workers is not sufficient. Distributed systems introduce several failure scenarios that must be handled correctly.
+In production distributed systems, simply creating a queue and running workers is not enough. Failures can occur at different points in the workflow and may result in duplicate processing, inconsistent states, or lost jobs.
 
-This project addresses the following engineering challenges:
+This project addresses the following reliability challenges.
 
-**1. Duplicate Job Submission**
-Clients may send the same request multiple times due to:
+1. Duplicate Job Submission
+Problem
+
+Clients may submit the same request multiple times due to:
+
 Network retries
-Client timeout issues
+Client timeout scenarios
 User resubmission
 API retry mechanisms
-Without protection, duplicate requests could create duplicate jobs and cause unintended processing.
-Solution implemented:
-Added idempotency handling using tenant_id and idempotency_key
-Enforced database-level uniqueness constraints
-Returned existing jobs for repeated requests instead of creating duplicates
 
-**2. Concurrent Worker Processing**
-Multiple workers may attempt to process available jobs at the same time.
-Without proper coordination:
-The same job could be executed by multiple workers
+Without protection, duplicate requests could create multiple jobs and trigger duplicate processing.
+
+Solution Implemented
+
+The system implements idempotent job creation using:
+
+tenant_id
+idempotency_key
+
+A database-level uniqueness constraint prevents duplicate job creation:
+
+UNIQUE(tenant_id, idempotency_key)
+Behavior
+
+First request:
+
+Create new job
+Return 201 Created
+
+Repeated request:
+
+Return existing job
+Return 200 OK
+
+This ensures duplicate client requests do not create duplicate jobs.
+
+2. Concurrent Worker Processing
+Problem
+
+Multiple workers may attempt to process available jobs simultaneously.
+
+Without coordination:
+
+Multiple workers could claim the same job
 External systems could receive duplicate requests
-Data consistency could be compromised
-Solution implemented:
-Used PostgreSQL row-level locking
-Implemented atomic job claiming using:
-FOR UPDATE SKIP LOCKED
-This allows multiple workers to operate concurrently while ensuring that each job is owned by only one worker at a time.
+Job state could become inconsistent
+Solution Implemented
 
-**3. External Side Effect Duplication**
-Job execution may interact with external systems such as:
+The worker system uses PostgreSQL row-level locking:
+
+FOR UPDATE SKIP LOCKED
+
+This provides atomic job claiming.
+
+Result
+
+Multiple workers can run concurrently while ensuring:
+
+One worker owns a job at a time
+Other workers skip locked jobs
+Duplicate execution is prevented
+3. External Side Effect Duplication
+Problem
+
+Jobs may interact with external systems such as:
+
 Email providers
 Payment systems
 Notification services
 Third-party APIs
-A worker could fail after completing the external action but before updating the database.
-Example scenario:
+
+A failure can happen after the external action completes but before the database update.
+
+Example:
+
 Worker starts execution
         |
 External action succeeds
         |
-Worker crashes before marking job complete
-A retry could incorrectly execute the external action again.
-Solution implemented:
-Added side-effect tracking
-Used the provided side_effects table
-Added uniqueness protection using job identifiers
-Checked existing side effects before retrying execution
+Worker crashes before job completion update
 
-**4. Approval Workflow Race Conditions**
-Certain jobs require manual approval before execution based on cost thresholds.
-Multiple users may attempt approval actions simultaneously:
+A retry could incorrectly execute the external action again.
+
+Solution Implemented
+
+The system provides exactly-once side-effect protection using:
+
+Existing side_effects table
+Job-based uniqueness protection
+Existing side-effect validation before retry execution
+
+This prevents duplicate external effects during retries or worker failures.
+
+4. Approval Workflow Race Conditions
+Problem
+
+Jobs above a configured cost threshold require approval.
+
+Multiple users may attempt approval actions simultaneously.
+
 Example:
+
 User A → Approve
 User B → Reject
 User C → Approve
-Without atomic state transitions, the job could reach an inconsistent state.
-Solution implemented:
-Added approval state management
-Allowed only valid state transitions
-Returned conflict responses (409) for invalid concurrent approval attempts
 
-**5. Worker Failure and Recovery**
-Background workers may stop unexpectedly because of:
+Without atomic state transitions, the job could reach an inconsistent state.
+
+Solution Implemented
+
+The system implements:
+
+Approval state management
+Atomic status transitions
+Validation of current job state
+
+Only valid transitions succeed.
+
+Invalid concurrent actions return:
+
+409 Conflict
+
+Example:
+
+job_not_awaiting_approval
+5. Worker Failure and Recovery
+Problem
+
+Workers may stop unexpectedly because of:
+
 Application crashes
 Container failures
-Network issues
+Network interruptions
 Resource limitations
-A job being processed by a failed worker should not remain permanently stuck.
-Solution implemented:
-Added worker lease management:
+
+A job should not remain permanently stuck.
+
+Solution Implemented
+
+The worker system uses lease-based ownership:
+
 leased_by
 lease_until
-Allowed expired jobs to be reclaimed by another worker
-Implemented recovery testing to verify failed worker scenarios
+
+Workflow:
+
+Worker A claims job
+        |
+Worker A fails
+        |
+Lease expires
+        |
+Worker B reclaims job
+
+Expired jobs can safely be processed again.
+
 Reliability Goals
-The system was designed around the following reliability principles:
+
+The system was designed around the following reliability principles.
+
 1. Exactly-Once Job Processing
-Ensure that a single job is not processed multiple times even when:
+
+The system ensures a job is not processed multiple times even when:
+
 Multiple workers are active
 Requests are duplicated
 Failures occur during execution
 2. Data Consistency
 
-Maintain a single source of truth using PostgreSQL transactions.
-The database controls:
+PostgreSQL acts as the single source of truth.
+
+Database transactions control:
+
 Job states
 Worker ownership
 Approval transitions
 Side-effect records
 3. Fault Tolerance
-The system should continue operating even when:
+
+The system continues operating when:
 
 Workers fail
 Requests are retried
-External execution fails temporarily
+External execution temporarily fails
 4. Safe Concurrency
-Enable multiple workers to run simultaneously while preventing:
+
+Multiple workers can execute simultaneously while preventing:
+
 Duplicate job ownership
 Race conditions
-Inconsistent state updates
+Invalid state transitions
 5. Verifiable Correctness
-The implementation includes automated tests covering all major reliability guarantees:
 
-Idempotency protection
-Concurrent request handling
-Worker concurrency
-Exactly-once side effects
-Approval race handling
-Worker recovery
+Automated tests validate all reliability guarantees.
+
 Final validation:
+
 docker compose exec api pytest -q
+
 Result:
+
 6 passed
-
-**2. System Architecture**
-High-level architecture diagram
-Component responsibilities
-
-Example:
-
+2. System Architecture
+High-Level Architecture
 Client
- |
-FastAPI API
- |
-PostgreSQL
- |
-Worker Processes
- |
+   |
+   |
+FastAPI API Service
+   |
+   |
+PostgreSQL Database
+   |
+   |
+Background Worker Processes
+   |
+   |
 Executor
- |
-side_effects
+   |
+   |
+side_effects Table
+Component Responsibilities
+Component	Responsibility
+FastAPI API	Job creation, status retrieval, approval/rejection APIs
+PostgreSQL	Durable job state and consistency management
+Worker Processes	Background job execution and recovery
+Executor	Performs the actual job operation
+side_effects Table	Prevents duplicate external effects
 3. Application Components
 app/main.py
 
-Explain:
+Responsible for API functionality.
 
-API endpoints
-Job creation
-Status checking
-Approval/rejection endpoints
+Implemented features:
+
+Job creation endpoint
+Job status retrieval
+Approval endpoint
+Rejection endpoint
+Idempotency handling
+Cost-based approval workflow
 app/worker.py
 
-Explain:
+Responsible for background processing.
+
+Implemented features:
 
 Job polling
-Claiming logic
-Lease handling
+Atomic job claiming
+Worker leasing
 Retry handling
+Failed job recovery
+Execution tracking
 app/executor.py
 
-Explain:
+The executor was provided as a frozen component.
 
-Provided frozen executor
-Exactly once execution requirement
+Purpose:
+
+Simulates external work execution
+Must execute exactly once
+Must not be modified or bypassed
 app/db.py
 
-Explain:
+Responsible for:
 
-Async connection pool
-Database access pattern
+PostgreSQL asynchronous connection pool
+Database access management
+Shared database connectivity
 4. Database Design
+jobs Table
 
-Detailed explanation:
+The jobs table stores complete job lifecycle information.
 
-jobs table
+Column	Purpose
+id	Unique job identifier
+tenant_id	Tenant ownership
+idempotency_key	Duplicate request prevention
+type	Job category
+payload	Job input data
+estimated_cost	Determines approval requirement
+status	Current lifecycle state
+attempts	Retry tracking
+max_attempts	Maximum allowed retries
+leased_by	Worker ownership
+lease_until	Worker lease expiration
+side_effects Table
 
-Columns:
+The provided side_effects table stores external execution results.
 
-id
-tenant_id
-idempotency_key
-type
-payload
-estimated_cost
-status
-attempts
-max_attempts
-leased_by
-lease_until
+Additional protection:
 
-Purpose of each column.
+UNIQUE(job_id)
 
-side_effects table
+Purpose:
 
-Explain:
-
-Existing provided table
-Added constraint
-Exactly once protection
+Prevent duplicate side effects
+Support recovery after worker failures
+Guarantee exactly-once execution behavior
 5. Job Lifecycle
-
-Explain all states:
-
+Normal Execution
 queued
- |
+   |
+   v
 running
- |
+   |
+   v
 succeeded
-
-Failure:
-
+Failure Flow
 running
- |
+   |
+   v
 failed
-
-Approval:
-
+Approval Flow
 queued
- |
+   |
+   v
 awaiting_approval
- |
-approved/rejected
+        |
+        +------------+
+        |            |
+        v            v
+   approved      rejected
 6. Reliability Guarantees
-
-This is the most important section.
-
 I1 - Idempotency
+Implementation
 
-Explain:
+Protection against duplicate requests using:
 
-duplicate requests
-unique constraint
-race handling
+tenant_id + idempotency_key
 
-Test:
+Database constraint:
 
+UNIQUE(tenant_id,idempotency_key)
+Tests
 test_idempotency.py
 test_idempotency_race.py
 I2 - Worker Concurrency
+Implementation
 
-Explain:
+Workers claim jobs using:
 
 FOR UPDATE SKIP LOCKED
 
-Why it prevents duplicate ownership.
+This prevents multiple workers from owning the same job.
 
-Test:
-
+Test
 test_worker_concurrency.py
 I3 - Exactly One Side Effect
+Implementation
 
-Explain:
+Protection through:
 
-provider execution
 side_effects table
-duplicate prevention
-
-Test:
-
+unique job relationship
+duplicate prevention checks
+Test
 test_side_effect.py
 I4 - Approval Race
+Implementation
 
-Explain:
+Handles simultaneous approval/rejection requests through atomic status transitions.
 
-multiple approve/reject requests
-atomic status transition
-409 conflicts
+Invalid transitions return:
 
-Test:
-
+409 Conflict
+Test
 test_approval.py
 I5 - Worker Recovery
+Implementation
 
-Explain:
+Uses:
 
-worker crash scenario
-lease expiration
-reclaiming
+leased_by
+lease_until
 
-Test:
+Expired jobs can be reclaimed by another worker.
 
+Test
 test_worker_recovery.py
 7. Testing Evidence
-
-Include:
-
-Command:
-
+Run Tests
 docker compose exec api pytest -q
-
-Output:
-
+Result
 6 passed
-
-Table:
-
+Test Coverage
 Test	Purpose	Result
-test_idempotency	Duplicate protection	PASS
-test_idempotency_race	Concurrent requests	PASS
-test_side_effect	Exactly once effect	PASS
-test_approval	Approval race	PASS
-test_worker_concurrency	Worker locking	PASS
-test_worker_recovery	Crash recovery	PASS
+test_idempotency.py	Duplicate protection	PASS
+test_idempotency_race.py	Concurrent requests	PASS
+test_side_effect.py	Exactly once effect	PASS
+test_approval.py	Approval race handling	PASS
+test_worker_concurrency.py	Worker locking	PASS
+test_worker_recovery.py	Crash recovery	PASS
 8. Running the System
 
-Commands:
+Start application:
 
 docker compose up --build -d --scale worker=3
+
+Run tests:
+
 docker compose exec api pytest -q
 9. Design Decisions and Trade-offs
+Why PostgreSQL?
 
-Explain:
+PostgreSQL provides:
 
-Why PostgreSQL
-Why database constraints
-Why leases
-Why row locking
+Strong consistency
+Transactions
+Row-level locking
+Durable state management
+Why Database Constraints?
+
+Database constraints provide protection even during:
+
+Concurrent requests
+Application retries
+Race conditions
+Why Leases?
+
+Leases provide:
+
+Worker ownership tracking
+Crash recovery
+Automatic job reclamation
+Why Row Locking?
+
+FOR UPDATE SKIP LOCKED provides:
+
+Safe parallel workers
+No duplicate ownership
+High concurrency
