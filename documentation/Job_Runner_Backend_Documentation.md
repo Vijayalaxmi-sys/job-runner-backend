@@ -501,3 +501,51 @@ FOR UPDATE SKIP LOCKED provides:
 Safe parallel workers
 No duplicate ownership
 High concurrency
+
+# 10. AI Assistance and Development Process
+
+## AI-Assisted Development
+
+AI tools were used as a supporting resource during the development process to improve productivity and code quality.
+
+The assistance was mainly used for:
+
+- Reviewing implementation approaches and design patterns
+- Discussing possible solutions for distributed system challenges
+- Assisting with debugging and troubleshooting
+- Improving technical documentation structure and clarity
+
+The system design, implementation decisions, code changes, testing, and final validation were performed and verified by the developer.
+
+---
+
+## Code Review and Validation
+
+The implementation was reviewed against the project requirements, including:
+
+- Idempotent job creation
+- Safe concurrent worker execution
+- Exactly-once side effect handling
+- Approval workflow consistency
+- Worker failure recovery
+
+Validation was performed through:
+
+- Manual code review
+- Local Docker Compose testing
+- Database behavior verification
+- Automated test execution
+
+Final test validation:
+
+```bash
+docker compose exec api pytest -q
+```
+
+Result:
+
+```text
+6 passed
+```
+
+The final implementation was verified to meet the required functionality and reliability goals.
