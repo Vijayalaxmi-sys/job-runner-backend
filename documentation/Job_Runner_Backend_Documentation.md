@@ -212,32 +212,38 @@ docker compose exec api pytest -q
 Result:
 6 passed
 
-**2. System Architecture**
-High-Level Architecture
+# 2. System Architecture
+
+## High-Level Architecture
+
+```text
 Client
    |
-   |
+   v
 FastAPI API Service
    |
-   |
+   v
 PostgreSQL Database
    |
-   |
+   v
 Background Worker Processes
    |
-   |
+   v
 Executor
    |
-   |
+   v
 side_effects Table
-Component Responsibilities
-Component	Responsibility
-FastAPI API	Job creation, status retrieval, approval/rejection APIs
-PostgreSQL	Durable job state and consistency management
-Worker Processes	Background job execution and recovery
-Executor	Performs the actual job operation
-side_effects Table	Prevents duplicate external effects
+```
 
+## Component Responsibilities
+
+| Component | Responsibility |
+|---|---|
+| FastAPI API | Job creation, status retrieval, approval and rejection APIs |
+| PostgreSQL | Durable job state storage and consistency management |
+| Worker Processes | Background job execution, job claiming, retry handling, and recovery |
+| Executor | Performs the actual job execution |
+| side_effects Table | Prevents duplicate external effects |
 **3. Application Components**
 app/main.py
 
