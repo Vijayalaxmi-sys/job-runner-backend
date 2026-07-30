@@ -310,6 +310,7 @@ Purpose:
 Prevent duplicate side effects
 Support recovery after worker failures
 Guarantee exactly-once execution behavior
+
 **5. Job Lifecycle**
 
 Normal Execution
@@ -337,7 +338,9 @@ awaiting_approval
    approved      rejected
    
 **6. Reliability Guarantees**
+
 **I1 - Idempotency**
+
 Implementation
 
 Protection against duplicate requests using:
@@ -347,7 +350,9 @@ UNIQUE(tenant_id,idempotency_key)
 Tests
 test_idempotency.py
 test_idempotency_race.py
+
 **I2 - Worker Concurrency**
+
 Implementation
 Workers claim jobs using:
 FOR UPDATE SKIP LOCKED
@@ -355,7 +360,9 @@ This prevents multiple workers from owning the same job.
 
 Test
 test_worker_concurrency.py
+
 **I3 - Exactly One Side Effect**
+
 Implementation
 Protection through:
 side_effects table
@@ -363,14 +370,18 @@ unique job relationship
 duplicate prevention checks
 Test
 test_side_effect.py
+
 **I4 - Approval Race**
+
 Implementation
 Handles simultaneous approval/rejection requests through atomic status transitions.
 Invalid transitions return:
 409 Conflict
 Test
 test_approval.py
+
 **I5 - Worker Recovery**
+
 Implementation
 Uses:
 leased_by
@@ -378,7 +389,9 @@ lease_until
 Expired jobs can be reclaimed by another worker.
 Test
 test_worker_recovery.py
-7. Testing Evidence
+
+**7. Testing Evidence**
+
 Run Tests
 docker compose exec api pytest -q
 Result
@@ -393,11 +406,14 @@ test_worker_concurrency.py	Worker locking	PASS
 test_worker_recovery.py	Crash recovery	PASS
 
 **8. Running the System**
+
 Start application:
 docker compose up --build -d --scale worker=3
 Run tests:
 docker compose exec api pytest -q
+
 **9. Design Decisions and Trade-offs**
+
 **Why PostgreSQL?**
 PostgreSQL provides:
 Strong consistency
